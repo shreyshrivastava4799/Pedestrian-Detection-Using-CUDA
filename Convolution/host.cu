@@ -6,14 +6,10 @@
 using namespace cv;
 using namespace std;
 
-// Allocate device constant memory for filter kernel  
-const unsigned int FILTER_SIZE = 3;
-__device__ __constant__ float d_filterKernel[FILTER_SIZE];
-
 
 int main(void)
 {
-
+    bool DEBUG = true;
     printf("Inside Host Code\n");
     
     // Error code to check return values for CUDA calls
@@ -52,7 +48,14 @@ int main(void)
     imshow("PersonImage",img);
     waitKey(0);
    
-    size_t imageSize = img.rows * img.cols * sizeof(float);
+    // Padding required depending on kernel size
+    int padding = 2;
+
+    // Providing padding to image
+    int paddedR = img.rows + padding;
+    int paddedC = img.cols + padding;
+
+    size_t imageSize = paddedR * paddedC * sizeof(float);
 
     // Allocate memory for Blue Channel of image
     float *h_B = (float *)malloc(imageSize);
@@ -71,42 +74,49 @@ int main(void)
     }
 
     // Converting Mat to 1D array 
-    for (int i = 0; i < img.rows; ++i)
-        for (int j = 0; j < img.cols; ++j)
+    for (int i = 0; i < paddedR; ++i)
+        for (int j = 0; j < paddedC; ++j)
         {
-            h_B[i*img.cols + j] = img.at<Vec3b>(i,j)[0];
-            h_G[i*img.cols + j] = img.at<Vec3b>(i,j)[1];
-            h_R[i*img.cols + j] = img.at<Vec3b>(i,j)[2];
-            cout<<i*img.cols +j<<" "<<i<<" "<<j<<" "<<endl;
+            if( i==0 || i==paddedR-1 || j==0 || j==paddedC-1 )
+            {
+                h_B[i*paddedC + j] = 0;
+                h_G[i*paddedC + j] = 0;
+                h_R[i*paddedC + j] = 0;
+            }                
+            else
+            {
+                h_B[i*paddedC + j] = img.at<Vec3b>(i,j)[0];
+                h_G[i*paddedC + j] = img.at<Vec3b>(i,j)[1];
+                h_R[i*paddedC + j] = img.at<Vec3b>(i,j)[2];
+            }
         }
 
-    // Verify that the channel array is correct
-    Mat checkImage(img.rows, img.cols, CV_8UC1, Scalar(0));
-    for (int i = 0; i < img.rows*img.cols; ++i)
-    {
-        checkImage.at<uchar>(i/img.cols,i%img.cols) = h_B[i];
-        // cout<<img.cols<<" "<<i<<" "<<i%img.cols<<endl;
-    }
-    imshow("Output Image", checkImage);
-    waitKey(0);
 
-    // Allocate memory output gradient values
-    float *h_output = (float *)malloc(imageSize);
+    // Verify that the channel array is correct
+    if(DEBUG)
+    {   
+        Mat checkImage(paddedR,paddedC, CV_8UC1, Scalar(0));
+        for (int i = 0; i < paddedR*paddedC; ++i)
+        {
+            checkImage.at<uchar>(i/paddedC,i%paddedC) = h_B[i];
+        }
+        imshow("checkImage", checkImage);
+        waitKey(0);
+    }
+
     
     // Allocate the device memory for Blue Channel
     float *d_B = NULL;
     err = cudaMalloc((void **)&d_B, imageSize);
-
     if (err != cudaSuccess)
     {
-        fprintf(stderr, "Failed to allocate device memory for image (error code %s)!\n", cudaGetErrorString(err));
+        fprintf(stderr, "Failed to allocate device memory for B channel (error code %s)!\n", cudaGetErrorString(err));
         exit(EXIT_FAILURE);
     }
 
     // Allocate the device memory for Green Channel
     float *d_G = NULL;
     err = cudaMalloc((void **)&d_G, imageSize);
-
     if (err != cudaSuccess)
     {
         fprintf(stderr, "Failed to allocate device memory for image (error code %s)!\n", cudaGetErrorString(err));
@@ -146,19 +156,37 @@ int main(void)
         exit(EXIT_FAILURE);
     }
 
+    
+
+    
+
     // Allocate the device memory for output
     float *d_output = NULL;
-    err = cudaMalloc((void **)&d_output, imageSize);
+    // err = cudaMalloc((void **)&d_output, tileSize);
+    err = cudaMalloc((void **)&d_output, img.rows*img.cols*sizeof(float));
     if (err != cudaSuccess)
     {
         fprintf(stderr, "Failed to allocate device memory for image (error code %s)!\n", cudaGetErrorString(err));
         exit(EXIT_FAILURE);
     }
-    
-    int blockX = 32, blockY = 32;
+    // Allocate memory output gradient values
+    // float *h_output = (float *)malloc(tileSize);
+    float *h_output = (float *)malloc(img.rows*img.cols*sizeof(float));
+
+    // Size of image block that will have its gradient calc. in one kernel call
+    int blockX = 30, blockY = 30;
+
+    // Size to be allocated for shared memory inside kernel
+    int tileX = blockX+padding;
+    int tileY = blockY+padding; 
+    size_t tileSize = (tileX)*(tileY)*sizeof(float);
+    // Specifying execution configuration
+    // cout<<"Verification: "<<ceil(img.rows/blockX)<<" "<<(img.cols/blockY)<<endl;
     dim3 X(ceil(img.rows/blockX),ceil(img.cols/blockY));
-    dim3 Y(blockX,blockY);
-    convolution<<<X, Y>>>(d_B, img.rows, img.cols, d_output);
+    // dim3 X(1,1);
+    dim3 Y(tileX/4  ,tileY);
+
+    convolution<<<X, Y, tileSize>>>(d_B, paddedR, paddedC, blockX, blockY, d_output);
    
     err = cudaGetLastError();
     if (err != cudaSuccess)
@@ -170,20 +198,22 @@ int main(void)
 
     // Copy the device result vector in device memory to the host result vector in host memory.
     printf("Copy output data from the CUDA device to the host memory\n");
-    err = cudaMemcpy(h_output, d_output, imageSize, cudaMemcpyDeviceToHost);
+    err = cudaMemcpy(h_output, d_output, tileSize, cudaMemcpyDeviceToHost);
     if (err != cudaSuccess)
     {
         fprintf(stderr, "Failed to copy output from device to host (error code %s)!\n", cudaGetErrorString(err));
         exit(EXIT_FAILURE);
     }
 
+
     Mat featureImage(img.rows, img.cols, CV_8UC1, Scalar(0));
     // Verify that the result vector is correct
     for (int i = 0; i < img.rows*img.cols; ++i)
     {
         featureImage.at<uchar>(i/img.cols,i%img.cols) = h_output[i];
-        // cout
+        // cout<<(int)featureImage.at<uchar>(i/tileY,i%tileY)<<endl;
     }
+    // imshow("Input Image", origImage);
     imshow("Output Image", featureImage);
     waitKey(0);
 

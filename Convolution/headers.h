@@ -9,4 +9,4 @@
 #include "opencv2/highgui/highgui.hpp"
 #include "opencv2/imgproc/imgproc.hpp"
 
-__global__ void convolution( float *image, int height, int width, float *output	);
+__global__ void convolution( float *image, int height, int width, int blockX, int blockY, float *output	);
