@@ -1,0 +1,13 @@
+# Script to submit CUDA C/C++ programs.
+
+# Torque directives
+#PBS -N step4
+#PBS -W group_list=hp3
+#PBS -q gpu
+#PBS -l walltime=00:05:00,mem=400mb,nodes=compute-0-1:gpus=1
+#PBS -V
+
+# User Directives
+cd /home/others/17MF3IM18/step4
+make run
+#End of script
