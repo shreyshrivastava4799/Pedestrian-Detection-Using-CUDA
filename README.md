@@ -3,7 +3,7 @@ This is a CUDA implementation of Histogram of Oriented Gradients (HOG) feature d
 
 ## Getting Started
 - Clone the repository.
-- Change your current directory to convolution
+- Change your current directory to Convolution
 - run:
     - make
     - ./convolution
