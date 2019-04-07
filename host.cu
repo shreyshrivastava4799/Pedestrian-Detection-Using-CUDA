@@ -58,8 +58,8 @@ float *step4(int *h_Hist, size_t sizeIn)
     }
 
     // Launch the L2 Norm CUDA Kernel
-    dim3 threadsPerBlock(1,1,1);
-	dim3 blocksPerGrid(1,s4YIn,s4XIn);
+    dim3 threadsPerBlock(s4XIn,s4YIn,1);
+	dim3 blocksPerGrid(1,1,1);
 	l2norm<<<blocksPerGrid, threadsPerBlock>>>(d_Hist, d_HistNorm);
     err = cudaGetLastError();
 
@@ -67,7 +67,8 @@ float *step4(int *h_Hist, size_t sizeIn)
     {
         fprintf(stderr, "Failed to launch L2 Norm kernel (error code %s)!\n", cudaGetErrorString(err));
         exit(EXIT_FAILURE);
-    }
+	}
+	cudaDeviceSynchronize();
 
     // Copy the device result in device memory to the host memory
     printf("Copy output data from the CUDA device to the host memory\n");
