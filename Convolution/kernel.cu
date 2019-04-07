@@ -3,6 +3,7 @@
 
 #define PI 3.14159265
 #define PADDING_SIZE 1
+#define FILTER_SIZE 3
 
 // declaring constant memory for kernel
 __device__ __constant__ float d_filterKernel[FILTER_SIZE] = { -1, 0, 1};
