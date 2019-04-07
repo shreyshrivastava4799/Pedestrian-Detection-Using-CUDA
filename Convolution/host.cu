@@ -1,6 +1,4 @@
-/*
-  Host main routine
-*/
+/*  Host main routine   */
 #include "headers.h"
 
 using namespace cv;
@@ -15,24 +13,24 @@ int main(void)
     // Error code to check return values for CUDA calls
     cudaError_t err = cudaSuccess;
 
-    /*
-        Image Loading 
-    */
+    /*   Image Loading   */
 
     // OpenCV code for reading image
     Mat img = imread("../persons/person_024.bmp",1);
 
-    /* 
-        // To verify if original image is loaded properly 
+    // To verify if original image is loaded properly 
+    if(DEBUG)
+    {        
         imshow("PersonImage",img);
         waitKey(0);
-       
-    */    
+    }     
    
     // Padding required depending on kernel size
+    // here kernel size is fixed always as 1 so 2*1
     int padding = 2;
 
-    // Providing padding to image X-rows and Y-cols
+    // Providing padding to image
+    // X will be treated as rows and Y as cols
     int paddedX = img.rows + padding;
     int paddedY = img.cols + padding;
 
@@ -138,32 +136,48 @@ int main(void)
         exit(EXIT_FAILURE);
     }
 
+    // Allocate memory for output gradient values: magnitude and angle
+    float *h_outputMag = (float *)malloc(imageSize);
+    float *h_outputAng = (float *)malloc(imageSize);
 
     // Allocate the device memory for output
-    float *d_output = NULL;
-    err = cudaMalloc((void **)&d_output, imageSize);
+    float *d_outputMag = NULL;
+    err = cudaMalloc((void **)&d_outputMag, imageSize);
     if (err != cudaSuccess)
     {
         fprintf(stderr, "Failed to allocate device memory for image (error code %s)!\n", cudaGetErrorString(err));
         exit(EXIT_FAILURE);
     }
 
-    // Allocate memory output gradient values
-    float *h_output = (float *)malloc(imageSize);
-
+    float *d_outputAng = NULL;
+    err = cudaMalloc((void **)&d_outputAng, imageSize);
+    if (err != cudaSuccess)
+    {
+        fprintf(stderr, "Failed to allocate device memory for image (error code %s)!\n", cudaGetErrorString(err));
+        exit(EXIT_FAILURE);
+    }
+    // Image is divided in no of image blocks gradients for each will be calculated parallely
     // Size of image block that will have its gradient calc. in one kernel call
     int blockX = 32, blockY = 32;
 
     // Size to be allocated for shared memory inside kernel
+    // This is the size of block along with padding so that convolution can be done 
+    // at the border points
     int tileX = blockX + padding;
     int tileY = blockY + padding; 
     size_t tileSize = (tileX)*(tileY)*sizeof(float);
 
-    // Specifying execution configuration
-    dim3 X(ceil(img.rows/blockX),ceil(img.cols/blockY));
-    dim3 Y(tileX/4  ,tileY);
+    // for each tile only 4th the threads are allocated and then reused accordingly
+    int blockDimX = ceil((double)tileX/4), blockDimY = tileY;
 
-    convolution<<<X, Y, tileSize>>>(d_B, paddedX, paddedY, blockX, blockY, d_output);
+    // the no. of thread blocks that have to be launched will be the no. of image rows and cols 
+    // divided by the no. of pixel we wish to keep in one block of image
+    int gridDimX = ceil((double)img.rows/blockX), gridDimY = ceil((double)img.cols/blockY);
+
+    // Specifying execution configuration
+    dim3 X(gridDimX,gridDimY);
+    dim3 Y(blockDimX,blockDimY);
+    convolution<<<X, Y, tileSize>>>(d_B, paddedX, paddedY, blockX, blockY, d_outputMag, d_outputAng, img.rows, img.cols);
    
     err = cudaGetLastError();
     if (err != cudaSuccess)
@@ -175,27 +189,45 @@ int main(void)
 
     // Copy the device result vector in device memory to the host result vector in host memory.
     printf("Copy output data from the CUDA device to the host memory\n");
-    err = cudaMemcpy(h_output, d_output, imageSize, cudaMemcpyDeviceToHost);
+    err = cudaMemcpy(h_outputMag, d_outputMag, imageSize, cudaMemcpyDeviceToHost);
     if (err != cudaSuccess)
     {
         fprintf(stderr, "Failed to copy output from device to host (error code %s)!\n", cudaGetErrorString(err));
         exit(EXIT_FAILURE);
     }
 
+    err = cudaMemcpy(h_outputAng, d_outputAng, imageSize, cudaMemcpyDeviceToHost);
+    if (err != cudaSuccess)
+    {
+        fprintf(stderr, "Failed to copy output from device to host (error code %s)!\n", cudaGetErrorString(err));
+        exit(EXIT_FAILURE);
+    }
 
     // Verify that the resulting image is correct
-    Mat featureImage(img.rows, img.cols, CV_8UC1, Scalar(0));
+    Mat magImage(img.rows, img.cols, CV_8UC1, Scalar(0));
+    Mat angleImage(img.rows, img.cols, CV_8UC1, Scalar(0));
     for (int i = 0; i < img.rows*img.cols; ++i)
     {
-        featureImage.at<uchar>(i/img.cols,i%img.cols) = h_output[i];
+        magImage.at<uchar>(i/img.cols,i%img.cols) = h_outputMag[i];
+        angleImage.at<uchar>(i/img.cols,i%img.cols) = h_outputAng[i];
     }
-    imshow("Output Image", featureImage);
+    imshow("Output Angle", angleImage);
+    imshow("Output Maginitude", magImage);
     waitKey(0);
+   
+
 
     printf("Test PASSED\n");
 
     // Free device global memory
-    err = cudaFree(d_output);
+    err = cudaFree(d_outputMag);
+    if (err != cudaSuccess)
+    {
+        fprintf(stderr, "Failed to free device array B (error code %s)!\n", cudaGetErrorString(err));
+        exit(EXIT_FAILURE);
+    }
+
+    err = cudaFree(d_outputAng);
     if (err != cudaSuccess)
     {
         fprintf(stderr, "Failed to free device array B (error code %s)!\n", cudaGetErrorString(err));
