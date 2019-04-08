@@ -7,7 +7,7 @@ using namespace std;
 
 int main(void)
 {
-    bool DEBUG = true;
+    bool DEBUG = false;
     printf("Inside Host Code\n");
     
     // Error code to check return values for CUDA calls
@@ -141,6 +141,57 @@ int main(void)
     float *h_outputAng = (float *)malloc(imageSize);
 
     // Allocate the device memory for output
+    float *d_outputBMag = NULL;
+    err = cudaMalloc((void **)&d_outputBMag, imageSize);
+    if (err != cudaSuccess)
+    {
+        fprintf(stderr, "Failed to allocate device memory for image (error code %s)!\n", cudaGetErrorString(err));
+        exit(EXIT_FAILURE);
+    }
+
+    float *d_outputBAng = NULL;
+    err = cudaMalloc((void **)&d_outputBAng, imageSize);
+    if (err != cudaSuccess)
+    {
+        fprintf(stderr, "Failed to allocate device memory for image (error code %s)!\n", cudaGetErrorString(err));
+        exit(EXIT_FAILURE);
+    }
+
+    // Allocate the device memory for output
+    float *d_outputGMag = NULL;
+    err = cudaMalloc((void **)&d_outputGMag, imageSize);
+    if (err != cudaSuccess)
+    {
+        fprintf(stderr, "Failed to allocate device memory for image (error code %s)!\n", cudaGetErrorString(err));
+        exit(EXIT_FAILURE);
+    }
+
+    float *d_outputGAng = NULL;
+    err = cudaMalloc((void **)&d_outputGAng, imageSize);
+    if (err != cudaSuccess)
+    {
+        fprintf(stderr, "Failed to allocate device memory for image (error code %s)!\n", cudaGetErrorString(err));
+        exit(EXIT_FAILURE);
+    }
+
+    // Allocate the device memory for output
+    float *d_outputRMag = NULL;
+    err = cudaMalloc((void **)&d_outputRMag, imageSize);
+    if (err != cudaSuccess)
+    {
+        fprintf(stderr, "Failed to allocate device memory for image (error code %s)!\n", cudaGetErrorString(err));
+        exit(EXIT_FAILURE);
+    }
+
+    float *d_outputRAng = NULL;
+    err = cudaMalloc((void **)&d_outputRAng, imageSize);
+    if (err != cudaSuccess)
+    {
+        fprintf(stderr, "Failed to allocate device memory for image (error code %s)!\n", cudaGetErrorString(err));
+        exit(EXIT_FAILURE);
+    }
+
+    // Allocate the device memory for output
     float *d_outputMag = NULL;
     err = cudaMalloc((void **)&d_outputMag, imageSize);
     if (err != cudaSuccess)
@@ -156,6 +207,7 @@ int main(void)
         fprintf(stderr, "Failed to allocate device memory for image (error code %s)!\n", cudaGetErrorString(err));
         exit(EXIT_FAILURE);
     }
+
     // Image is divided in no of image blocks gradients for each will be calculated parallely
     // Size of image block that will have its gradient calc. in one kernel call
     int blockX = 32, blockY = 32;
@@ -177,8 +229,11 @@ int main(void)
     // Specifying execution configuration
     dim3 X(gridDimX,gridDimY);
     dim3 Y(blockDimX,blockDimY);
-    convolution<<<X, Y, tileSize>>>(d_B, paddedX, paddedY, blockX, blockY, d_outputMag, d_outputAng, img.rows, img.cols);
+    convolution<<<X, Y, tileSize>>>(d_B, paddedX, paddedY, blockX, blockY, d_outputBMag, d_outputBAng, img.rows, img.cols);
+    convolution<<<X, Y, tileSize>>>(d_G, paddedX, paddedY, blockX, blockY, d_outputGMag, d_outputGAng, img.rows, img.cols);
+    convolution<<<X, Y, tileSize>>>(d_R, paddedX, paddedY, blockX, blockY, d_outputRMag, d_outputRAng, img.rows, img.cols);
    
+
     err = cudaGetLastError();
     if (err != cudaSuccess)
     {
@@ -186,6 +241,10 @@ int main(void)
         exit(EXIT_FAILURE);
     }
     cudaDeviceSynchronize();
+
+    Y.x = blockX, Y.y = blockY;
+    max<<<X, Y>>>(d_outputBMag, d_outputBAng, d_outputGMag, d_outputGAng, d_outputRMag, d_outputRAng,
+        d_outputMag, d_outputAng, img.rows, img.cols);
 
     // Copy the device result vector in device memory to the host result vector in host memory.
     printf("Copy output data from the CUDA device to the host memory\n");
@@ -220,14 +279,14 @@ int main(void)
     printf("Test PASSED\n");
 
     // Free device global memory
-    err = cudaFree(d_outputMag);
+    err = cudaFree(d_outputBMag);
     if (err != cudaSuccess)
     {
         fprintf(stderr, "Failed to free device array B (error code %s)!\n", cudaGetErrorString(err));
         exit(EXIT_FAILURE);
     }
 
-    err = cudaFree(d_outputAng);
+    err = cudaFree(d_outputBAng);
     if (err != cudaSuccess)
     {
         fprintf(stderr, "Failed to free device array B (error code %s)!\n", cudaGetErrorString(err));

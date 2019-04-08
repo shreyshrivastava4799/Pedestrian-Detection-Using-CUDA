@@ -11,7 +11,8 @@ __device__ __constant__ float d_filterKernel[FILTER_SIZE] = { -1, 0, 1};
 
 __global__ void convolution( float *image, int paddedX, int paddedY,
 							 int blockX, int blockY, 
-							 float *outputMag, float *outputAng, int imgRows, int imgCols)
+							 float *outputMag, float *outputAng,
+							  int imgRows, int imgCols)
 {
 
 	/*
@@ -92,5 +93,31 @@ __global__ void convolution( float *image, int paddedX, int paddedY,
 
 		}
 	}
+
+}
+
+__global__ void max(float *d_outputBMag,float *d_outputBAng,
+					float *d_outputGMag,float *d_outputGAng,
+					float *d_outputRMag,float *d_outputRAng,
+					float *d_outputMag,float  *d_outputAng,
+					int imgRows, int  imgCols)
+{
+
+	int tidx = blockIdx.x*blockDim.x + threadIdx.x;
+	int tidy = blockIdx.y*blockDim.y + threadIdx.y;
+
+	if( tidx<imgRows && tidy<imgCols)
+	{
+		float maxMag = d_outputBMag[tidx*imgCols + tidy], maxAng = d_outputBAng[tidx*imgCols + tidy];
+		
+		if( maxMag < d_outputGMag[tidx*imgCols + tidy] )
+			maxMag = d_outputGMag[tidx*imgCols + tidy], maxAng = d_outputGAng[tidx*imgCols + tidy];
+
+		if( maxMag < d_outputRMag[tidx*imgCols + tidy] )
+			maxMag = d_outputRMag[tidx*imgCols + tidy], maxAng = d_outputRAng[tidx*imgCols + tidy];
+
+		d_outputMag[tidx*imgCols + tidy] = maxMag,d_outputAng[tidx*imgCols + tidy] = maxAng; 
+	}
+
 
 }
