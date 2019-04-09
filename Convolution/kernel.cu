@@ -100,7 +100,6 @@ __global__ void convolution( float *image, int paddedX, int paddedY,
 	}
 
 }
-// i= 303756 -nan 0
 
 __global__ void max(float *d_outputBMag,float *d_outputBAng,
 					float *d_outputGMag,float *d_outputGAng,
@@ -129,30 +128,30 @@ __global__ void max(float *d_outputBMag,float *d_outputBAng,
 }
 
 
-__global__ void histogram(float *grad,float *dir, int height, int width,float *output)
+__global__ void histogram(float *mag,float *dir, int height, int width,float *output)
 {
-    // 
+   
     int j = blockIdx.x * blockDim.x + threadIdx.x;
 	int i = blockIdx.y * blockDim.y + threadIdx.y;
     
-    float magnitude=grad[i*width+j];
-    float direction=dir[i*width+j];
+    float magnitude = mag[i*width+j];
+    float direction = dir[i*width+j];
 
-    int blockNum=blockIdx.y*gridDim.x+blockIdx.x;
+    int blockNum = blockIdx.y*gridDim.x + blockIdx.x;
 
-    //initializing the 9-element array for each block.
-    if(threadIdx.x==0&&threadIdx.y==0)
+    // initializing the 9-element array for each block.
+    if( threadIdx.x==0 && threadIdx.y==0 )
     {
 	    for(int k=0;k<9;++k)
-	    {
 	    	output[k+blockNum*9]=0;
-	    }
 	}
-    __syncthreads();
-    //waiting for initialization.
 
-    //calculating the histogram values
-    int low=(direction/20);
+    // waiting for initialization.
+    __syncthreads();
+
+    // calculating the histogram values
+    // calculating the lower angle container for this gradient value 
+    int low = (direction/20);
     atomicAdd(&output[blockNum*9+low],magnitude*((low+1)*20 -direction)/20.0);
     atomicAdd(&output[blockNum*9+(low+1)%9],magnitude*((direction-low*20)/20.0));	
 }
