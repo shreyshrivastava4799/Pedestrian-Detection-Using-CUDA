@@ -40,17 +40,8 @@ void l2norm(const int *input, float *output)
 		for(int i=0; i<9; ++i)
 		{
 			*(output + 36*(y*(X-1) + x) + i) = *(hist + 9*(y*X + x) + i)/norm;
-		}
-		for(int i=0; i<9; ++i)
-		{
 			*(output + 36*(y*(X-1) + x) + i + 9) = *(hist + 9*(y*X + x + 1) + i)/norm;
-		}
-		for(int i=0; i<9; ++i)
-		{
 			*(output + 36*(y*(X-1) + x) + i + 18) = *(hist + 9*((y + 1)*X + x + 1) + i)/norm;
-		}
-		for(int i=0; i<9; ++i)
-		{
 			*(output + 36*(y*(X-1) + x) + i + 27) = *(hist + 9*((y + 1)*X + x) + i)/norm;
 		}
 	}
