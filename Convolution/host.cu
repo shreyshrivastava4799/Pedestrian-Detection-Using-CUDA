@@ -220,7 +220,7 @@ int main(void)
     /*   Image Loading   */
 
     // OpenCV code for reading image
-    Mat img = imread("/home/kanishk/Downloads/persons/person_024.bmp",1);
+    Mat img = imread("../persons/person_024.bmp",1);
 
     // To verify if original image is loaded properly 
     if(DEBUG)
@@ -465,6 +465,7 @@ int main(void)
         fprintf(stderr, "Failed to copy output from device to host (error code %s)!\n", cudaGetErrorString(err));
         exit(EXIT_FAILURE);
     }
+    
     float* final=hist(h_outputMag,h_outputAng,imageSize,img.rows,img.cols);
   /*
     //for verifying the 9-element array of each block.
