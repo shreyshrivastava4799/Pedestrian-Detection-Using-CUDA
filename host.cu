@@ -6,7 +6,20 @@
 __global__ void l2norm(const int*, float*);
 
 #define s4XIn 8
-#define s4YIn 16 
+#define s4YIn 16
+
+int *typecastHistograms(float *histIn)
+{
+	int numElements = s4XIn*s4YIn*9;
+    size_t size = numElements * sizeof(int);
+	int *histOut = (int *)malloc(size);
+
+	for(int i=0; i<numElements; ++i)
+	{
+		*(histOut + i) = (int)(*(histIn + i));
+	}
+	return histOut;
+}
 
 float *step4(int *h_Hist, size_t sizeIn)
 {
