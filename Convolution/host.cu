@@ -217,9 +217,16 @@ int main(void)
     cudaError_t err = cudaSuccess;
 
     /*   Image Loading   */
+    ifstream inFile("imageName.txt");
+    ofstream outFile("outfile.txt");
+
+    string line;
+    while (getline(inFile, line))
+    {
+    
 
     // OpenCV code for reading image
-    Mat origImg = imread("../persons/person_024.bmp",1);
+    Mat origImg = imread(line,1);
 
 
     // To verify if original image is loaded properly 
@@ -246,8 +253,8 @@ int main(void)
         }
     }   
 
-    imshow("ResizedImage",resizeImg);
-    waitKey(0);
+    // imshow("ResizedImage",resizeImg);
+    // waitKey(0);
     
     int windowsRows = 128;
     int windowsCols = 64;
@@ -522,9 +529,9 @@ int main(void)
                 magImage.at<uchar>(i/img.cols,i%img.cols) = h_outputMag[i];
                 angleImage.at<uchar>(i/img.cols,i%img.cols) = h_outputAng[i];
             }
-            imshow("Output Angle", angleImage);
-            imshow("Output Maginitude", magImage);
-            waitKey(0);
+            // imshow("Output Angle", angleImage);
+            // imshow("Output Maginitude", magImage);
+            // waitKey(0);
            
 
             // Free device global memory
@@ -578,12 +585,24 @@ int main(void)
         	int *histOutput = typecastHistograms(histGrad);
         	float *featureVec = calcNormalHist(histOutput, sizeIn);
 
+            int numElementsOut = (XIn - 1)*(YIn - 1)*36;
+            
+            if (outFile.is_open())
+            {
+                for(int count = 0; count < numElementsOut; count ++){
+                    outFile << featureVec[count] << " " ;
+                }
+                outFile << endl;
+            }
+            else cout << "Unable to open file";
+
             // // Verification of feature vector:
-            // int numElementsOut = (XIn - 1)*(YIn - 1)*36;
             // for (int i = 0; i < numElementsOut; ++i)
             // {
             //     cout<<"i: "<<i<<" featureVec:"<<featureVec[i]<<endl;
             // }
+
+            
 
             // Reset the device and exit
             // cudaDeviceReset causes the driver to clean up all state. While
@@ -600,7 +619,10 @@ int main(void)
             }
 
             printf("Done\n");
-        }    
+        }   
+        outFile.close(); 
         return 0;
+
+    }
 }
 

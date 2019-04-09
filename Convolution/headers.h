@@ -3,6 +3,8 @@
 #include <stdio.h>
 #include <iostream>
 #include <cuda_runtime.h>
+#include <string>
+#include <fstream>
 
 #include "opencv/cv.h"
 #include "opencv2/core/core.hpp"
