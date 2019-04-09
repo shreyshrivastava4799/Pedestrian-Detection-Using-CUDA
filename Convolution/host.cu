@@ -218,7 +218,7 @@ int main(void)
 
     /*   Image Loading   */
     ifstream inFile("imageName.txt");
-    ofstream outFile("outfile.txt");
+    ofstream outFile("outfileNeg.txt");
 
     string line;
     while (getline(inFile, line))
@@ -237,7 +237,7 @@ int main(void)
     }  
 
     // resizing image
-    int resolution = 2;
+    int resolution = 1;
     int resizedRows  = origImg.rows/resolution;   
     int resizedCols  = origImg.cols/resolution;
     Mat resizeImg(resizedRows, resizedCols, CV_8UC3, Scalar(0,0,0));
@@ -602,7 +602,47 @@ int main(void)
             //     cout<<"i: "<<i<<" featureVec:"<<featureVec[i]<<endl;
             // }
 
+            // int winsize = 3780, blockSizeX = 18, blockSizeY = 2;
+            // int numBlocksPerWindowX = 7, numBlocksPerWindowY = 15;
+            // int numBlocksX =1, numBlocksY = 1;
+            // float *h_weights = (float *)malloc(winsize*sizeof(float));
+            // float bias;
+
+            // float *inputs=featureVec;
+            // int imsize = numBlocksX*numBlocksY*18*2;
+            // err = cudaMalloc((void **)&inputs,imsize*sizeof(float));
+            // // cudaMemcpy(inputs, final, imsize*sizeof(float), cudaMemcpyHostToDevice);
+
+            // float *d_weights=NULL;
+            // err = cudaMalloc((void **)&d_weights,(winsize*sizeof(float)));
+
+
+            // int opX = (numBlocksX - numBlocksPerWindowX) + 1;
+            // int opY = (numBlocksY - numBlocksPerWindowY) + 1;
+           
+            // float *h_svmScores = (float *)malloc(opX*opY*sizeof(float));
+
+            // float *d_svmScores = NULL;
+            // cudaMalloc((void **)&d_svmScores,(opX*opY*sizeof(float)));
+
+            // FILE *f = fopen("svmweights.txt","r");
+            // for(int i = 0; i < winsize; i++)
+            //     fscanf(f, "%f", h_weights+i);
+
+            // fscanf(f, "%f", &bias);
+
+            // cudaMemcpy(d_weights, h_weights, winsize*sizeof(float), cudaMemcpyHostToDevice);
             
+            // dim3 grid1(opX,opY,1);
+            // dim3 block1(numBlocksPerWindowX*blockSizeX , 1 ,1);
+
+            // LinearSVMEvaluation<<<grid1, block1>>>(inputs, h_weights, bias,
+            //   blockSizeX, blockSizeY, numBlocksPerWindowX, numBlocksPerWindowY, d_svmScores);
+
+            // cudaMemcpy(d_svmScores, h_svmScores, opX*opY*sizeof(float), cudaMemcpyDeviceToHost);
+
+            // cout<<h_svmScores[0]<<endl;
+
 
             // Reset the device and exit
             // cudaDeviceReset causes the driver to clean up all state. While
@@ -620,9 +660,10 @@ int main(void)
 
             printf("Done\n");
         }   
-        outFile.close(); 
-        return 0;
 
     }
+    outFile.close(); 
+    return 0;
+
 }
 

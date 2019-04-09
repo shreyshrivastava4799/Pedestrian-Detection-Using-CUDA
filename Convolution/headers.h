@@ -27,3 +27,7 @@ __global__ void histogram( float *mag,float *dir,
 __global__ void l2norm( const int*, float*);
 
 
+__global__ void LinearSVMEvaluation(float *inputs, float *weigths, float bias,
+                                    int blockSizeX, int blockSizeY, int numBlocksPerWindowX,
+                                    int numBlocksPerWindowY, float *svmScores
+                                      );
