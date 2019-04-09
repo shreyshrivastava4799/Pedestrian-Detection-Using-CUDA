@@ -4,6 +4,84 @@
 using namespace cv;
 using namespace std;
 
+float* hist(float *magnitude,float*direction,size_t imageSize,int rows,int cols)
+{
+    
+    
+    /*
+       author@Kanishk Singh
+    */
+
+    cudaError_t err = cudaSuccess;
+
+    //final output array for feature vector of size 9*number of blocks
+    float *final=(float*)malloc((9*imageSize/64));
+
+    //creating the device array for the same
+    float *d_hist_array=NULL;
+    err = cudaMalloc((void **)&d_hist_array,(9*imageSize/64));
+
+    
+    //creating the device array for magnitude
+    float *d_magnitude = NULL;
+    err = cudaMalloc((void **)&d_magnitude, imageSize);
+    if (err != cudaSuccess)
+    {
+        fprintf(stderr, "Failed to allocate device memory for magnitude (error code %s)!\n", cudaGetErrorString(err));
+        exit(EXIT_FAILURE);
+    }
+    //copying the magnitude array into device magnitude array
+    cudaMemcpy(d_magnitude,magnitude, imageSize, cudaMemcpyHostToDevice);
+    
+    
+    //creating the device array for direction
+    float *d_direction = NULL;
+    err = cudaMalloc((void **)&d_direction, imageSize);
+    if (err != cudaSuccess)
+    {
+        fprintf(stderr, "Failed to allocate device memory for image (error code %s)!\n", cudaGetErrorString(err));
+        exit(EXIT_FAILURE);
+    }
+    //copying the direction array into device direction array
+    cudaMemcpy(d_direction,direction, imageSize, cudaMemcpyHostToDevice);
+    
+   
+    //Specifying number of blocks and number of threads.
+    dim3 grid(cols/8,rows/8,1);
+    dim3 block(8,8,1);
+    
+    //calling the kernel
+    histogram<<<grid,block>>>(d_magnitude,d_direction,rows,cols,d_hist_array);
+   
+    //copying the device array to host
+    cudaMemcpy(final, d_hist_array, (9*imageSize/64), cudaMemcpyDeviceToHost);
+
+    err = cudaFree(d_hist_array);
+    if (err != cudaSuccess)
+    {
+        fprintf(stderr, "Failed to free device array B (error code %s)!\n", cudaGetErrorString(err));
+        exit(EXIT_FAILURE);
+    }
+    err = cudaFree(d_magnitude);
+    if (err != cudaSuccess)
+    {
+        fprintf(stderr, "Failed to free device array B (error code %s)!\n", cudaGetErrorString(err));
+        exit(EXIT_FAILURE);
+    }
+    err = cudaFree(d_direction);
+    if (err != cudaSuccess)
+    {
+        fprintf(stderr, "Failed to free device array B (error code %s)!\n", cudaGetErrorString(err));
+        exit(EXIT_FAILURE);
+    }
+    for(int i=0;i<(9*rows*cols/64);i++)
+    {
+     	if(final[i]>300||final[i]<0)cout<<final[i]<<endl;
+    }
+    
+    return(final);
+}
+
 
 int main(void)
 {
@@ -16,7 +94,7 @@ int main(void)
     /*   Image Loading   */
 
     // OpenCV code for reading image
-    Mat img = imread("../persons/person_024.bmp",1);
+    Mat img = imread("/home/kanishk/Downloads/persons/person_024.bmp",1);
 
     // To verify if original image is loaded properly 
     if(DEBUG)
@@ -245,7 +323,7 @@ int main(void)
     Y.x = blockX, Y.y = blockY;
     max<<<X, Y>>>(d_outputBMag, d_outputBAng, d_outputGMag, d_outputGAng, d_outputRMag, d_outputRAng,
         d_outputMag, d_outputAng, img.rows, img.cols);
-
+    
     // Copy the device result vector in device memory to the host result vector in host memory.
     printf("Copy output data from the CUDA device to the host memory\n");
     err = cudaMemcpy(h_outputMag, d_outputMag, imageSize, cudaMemcpyDeviceToHost);
@@ -261,7 +339,17 @@ int main(void)
         fprintf(stderr, "Failed to copy output from device to host (error code %s)!\n", cudaGetErrorString(err));
         exit(EXIT_FAILURE);
     }
-
+    float* final=hist(h_outputMag,h_outputAng,imageSize,img.rows,img.cols);
+  /*
+    //for verifying the 9-element array of each block.
+    for(int i=0;i<9*img.rows*img.cols/64;++i)
+    {
+    	cout<<final[i]<<" ";
+    	if(i%9==0)
+    	{
+             cout<<endl;
+    	}
+    }*/
     // Verify that the resulting image is correct
     Mat magImage(img.rows, img.cols, CV_8UC1, Scalar(0));
     Mat angleImage(img.rows, img.cols, CV_8UC1, Scalar(0));
@@ -314,6 +402,7 @@ int main(void)
         exit(EXIT_FAILURE);
     }
 
+    
     // Free host memory
     free(h_B);
     free(h_G);
