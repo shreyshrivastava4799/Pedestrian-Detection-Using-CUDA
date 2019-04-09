@@ -5,6 +5,9 @@
 #define PADDING_SIZE 1
 #define FILTER_SIZE 3
 
+#define X 8
+#define Y 16
+
 // declaring constant memory for kernel
 __device__ __constant__ float d_filterKernel[FILTER_SIZE] = { -1, 0, 1};
 
@@ -152,4 +155,49 @@ __global__ void histogram(float *grad,float *dir, int height, int width,float *o
     int low=(direction/20);
     atomicAdd(&output[blockNum*9+low],magnitude*((low+1)*20 -direction)/20.0);
     atomicAdd(&output[blockNum*9+(low+1)%9],magnitude*((direction-low*20)/20.0));	
+}
+
+
+__global__
+void l2norm(const int *input, float *output)
+{
+	// Shared memory for kernel
+	__shared__ int hist[Y*X*9];
+
+	// Index for 16x16 window
+	int x = threadIdx.x;
+	int y = threadIdx.y;
+
+	// Copy the top left 8x8 block to shared memory
+	for(int i=0; i<9; ++i)
+	{
+		*(hist + 9*(y*X + x) + i) = *(input + 9*(y*X + x) + i);
+	}
+
+	// Synchronize threads after all shared memory is copied
+	__syncthreads();
+
+	// Normalize the 36 length feature vector
+	if(x != X-1 && y != Y-1)
+	{
+		// Calculate the normalizing factor for 16x16 window
+		float norm = 0;
+		for(int i=0; i<9; ++i)
+		{
+			norm += powf(*(hist + 9*(y*X + x) + i), 2);
+			norm += powf(*(hist + 9*(y*X + x + 1) + i), 2);
+			norm += powf(*(hist + 9*((y + 1)*X + x + 1) + i), 2);
+			norm += powf(*(hist + 9*((y + 1)*X + x) + i), 2);
+		}
+		norm = sqrt(norm);
+
+		// Normalize and store the output feature vector
+		for(int i=0; i<9; ++i)
+		{
+			*(output + 36*(y*(X-1) + x) + i) = *(hist + 9*(y*X + x) + i)/norm;
+			*(output + 36*(y*(X-1) + x) + i + 9) = *(hist + 9*(y*X + x + 1) + i)/norm;
+			*(output + 36*(y*(X-1) + x) + i + 18) = *(hist + 9*((y + 1)*X + x + 1) + i)/norm;
+			*(output + 36*(y*(X-1) + x) + i + 27) = *(hist + 9*((y + 1)*X + x) + i)/norm;
+		}
+	}
 }
