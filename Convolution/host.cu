@@ -252,9 +252,11 @@ int main(void)
 
         }
     }   
-
-    // imshow("ResizedImage",resizeImg);
-    // waitKey(0);
+    if(DEBUG)
+    {    
+        imshow("ResizedImage",resizeImg);
+        waitKey(0);
+    }
     
     int windowsRows = 128;
     int windowsCols = 64;
@@ -529,9 +531,12 @@ int main(void)
                 magImage.at<uchar>(i/img.cols,i%img.cols) = h_outputMag[i];
                 angleImage.at<uchar>(i/img.cols,i%img.cols) = h_outputAng[i];
             }
-            // imshow("Output Angle", angleImage);
-            // imshow("Output Maginitude", magImage);
-            // waitKey(0);
+            if(DEBUG)
+            {   
+                imshow("Output Angle", angleImage);
+                imshow("Output Maginitude", magImage);
+                waitKey(0);
+            }
            
 
             // Free device global memory
