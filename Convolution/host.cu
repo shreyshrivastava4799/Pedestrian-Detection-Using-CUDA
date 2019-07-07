@@ -75,7 +75,7 @@ float* calcHistogram(float *magnitude, float*direction, int rows, int cols)
         exit(EXIT_FAILURE);
     }
 
-    printf("Calculation of histogram done.\n");
+    // printf("Calculation of histogram done.\n");
     
     return(final);
 }
@@ -201,7 +201,7 @@ float *calcNormalHist(int *h_Hist, size_t sizeIn)
         exit(EXIT_FAILURE);
     }
 
-	printf("Calculation of normalized histogram done.\n");
+	// printf("Calculation of normalized histogram done.\n");
 	
 	// Return result
 	return h_HistNorm;
@@ -210,7 +210,7 @@ float *calcNormalHist(int *h_Hist, size_t sizeIn)
 
 int main(void)
 {
-    bool DEBUG = false;
+    bool DEBUG = true;
     printf("Inside Host Code\n");
     
     // Error code to check return values for CUDA calls
@@ -219,6 +219,95 @@ int main(void)
     /*   Image Loading   */
     ifstream inFile("imageName.txt");
     ofstream outFile("outfileNeg.txt");
+
+    int winsize = 3780, blockSizeX = 18, blockSizeY = 2;
+    int numBlocksPerWindowX = 7, numBlocksPerWindowY = 15;
+
+    float *h_weights = (float *)malloc(winsize*sizeof(float));
+    float bias;
+
+    float *input= NULL;
+    err = cudaMalloc((void **)&input,winsize*sizeof(float));
+    // cudaMemcpy(input, final, winsize*sizeof(float), cudaMemcpyHostToDevice);
+    if (err != cudaSuccess)
+    {
+        fprintf(stderr, "Failed to allocate device memory for magnitude (error code %s)!\n", cudaGetErrorString(err));
+        exit(EXIT_FAILURE);
+    }
+
+    float *d_weights=NULL;
+    cudaMalloc((void **)&d_weights,(winsize*sizeof(float)));
+    //printf("%d",err);
+
+    //int opX = (numBlocksX - numBlocksPerWindowX) + 1;
+    //int opY = (numBlocksY - numBlocksPerWindowY) + 1;
+    int opX = 1, opY = 1;
+    float *h_svmScores = (float *)malloc(opX*opY*sizeof(float));
+
+    float *d_svmScores = NULL;
+    cudaMalloc((void **)&d_svmScores,(opX*opY*sizeof(float)));
+
+
+    FILE *f = fopen("svmweights.txt","r");
+    for(int i = 0; i < winsize; i++){
+      fscanf(f, "%f", h_weights+i);
+      //printf("%f\t", final[i]);
+    }
+
+    fscanf(f, "%f", &bias);
+    fclose(f);
+    //printf("%f\n", bias);
+
+    err = cudaMemcpy(d_weights, h_weights, winsize*sizeof(float), cudaMemcpyHostToDevice);
+    if(err != cudaSuccess)
+    printf("error2\n");
+
+    // int winsize = 3780;
+    // int blockSizeX = 18, blockSizeY = 2;
+    // int numBlocksPerWindowX = 7, numBlocksPerWindowY = 15;
+
+    // float bias;
+    
+
+    // float *input;
+    // err = cudaMalloc((void **)&input,winsize*sizeof(float));
+    // if (err != cudaSuccess)
+    // {
+    //     fprintf(stderr, "Failed to allocate device memory for svm input (error code %s)!\n", cudaGetErrorString(err));
+    //     exit(EXIT_FAILURE);
+    // }
+    
+    // float *h_weights = (float *)malloc(winsize*sizeof(float));
+
+    // float *d_weights=NULL;
+    // err = cudaMalloc((void **)&d_weights,(winsize*sizeof(float)));
+    // if (err != cudaSuccess)
+    // {
+    //     fprintf(stderr, "Failed to allocate device memory for svm weights (error code %s)!\n", cudaGetErrorString(err));
+    //     exit(EXIT_FAILURE);
+    // }
+
+    // int opX = 1;
+    // int opY = 1;
+    // cout<<"opX: "<<opX<<" opY: "<<opY<<endl;
+   
+    // float *h_svmScores = (float *)malloc(opX*opY*sizeof(float));
+
+    // float *d_svmScores = NULL;
+    // cudaMalloc((void **)&d_svmScores,(opX*opY*sizeof(float)));
+
+    // FILE *f = fopen("svmweights.txt","r");
+    // for(int i = 0; i < winsize; i++)
+    //     fscanf(f, "%f", h_weights+i);
+
+    // fscanf(f, "%f", &bias);
+    // fclose(f);
+
+    // cudaMemcpy(d_weights, h_weights, winsize*sizeof(float), cudaMemcpyHostToDevice);
+    
+    // dim3 grid1(opX,opY,1);
+    // dim3 block1(numBlocksPerWindowX*blockSizeX , 1 ,1);
+
 
     string line;
     while (getline(inFile, line))
@@ -232,7 +321,7 @@ int main(void)
     // To verify if original image is loaded properly 
     if(DEBUG)
     {        
-        imshow("PersonImage",origImg);
+        imshow("OriginalImage",origImg);
         waitKey(0);
     }  
 
@@ -252,6 +341,7 @@ int main(void)
 
         }
     }   
+
     if(DEBUG)
     {    
         imshow("ResizedImage",resizeImg);
@@ -267,7 +357,7 @@ int main(void)
     for (int row = 0; row < resizeImg.rows - windowsRows; row += StepSlide)
         for (int col = 0; col < resizeImg.cols - windowsCols; col += StepSlide)
         {
-            
+           
             Mat img(windowsRows, windowsCols, CV_8UC3, Scalar(0,0,0));        
             for (int k = 0; k < windowsRows; ++k)
             {
@@ -326,17 +416,17 @@ int main(void)
                 }
 
 
-            // Verify that the channel array is correct
-            if(DEBUG)
-            {   
-                Mat checkImage(paddedX,paddedY, CV_8UC1, Scalar(0));
-                for (int i = 0; i < paddedX*paddedY; ++i)
-                {
-                    checkImage.at<uchar>(i/paddedY,i%paddedY) = h_B[i];
-                }
-                imshow("checkImage", checkImage);
-                waitKey(0);
-            }
+            // // Verify that the channel array is correct
+            // if(DEBUG)
+            // {   
+            //     Mat checkImage(paddedX,paddedY, CV_8UC1, Scalar(0));
+            //     for (int i = 0; i < paddedX*paddedY; ++i)
+            //     {
+            //         checkImage.at<uchar>(i/paddedY,i%paddedY) = h_B[i];
+            //     }
+            //     imshow("checkImage", checkImage);
+            //     waitKey(0);
+            // }
 
             
             // Allocate the device memory for Blue Channel
@@ -463,32 +553,49 @@ int main(void)
                 fprintf(stderr, "Failed to allocate device memory for image (error code %s)!\n", cudaGetErrorString(err));
                 exit(EXIT_FAILURE);
             }
-
             // Image is divided in no of image blocks gradients for each will be calculated parallely
             // Size of image block that will have its gradient calc. in one kernel call
             int blockX = 32, blockY = 32;
+            dim3 X,Y;
 
-            // Size to be allocated for shared memory inside kernel
-            // This is the size of block along with padding so that convolution can be done 
-            // at the border points
-            int tileX = blockX + padding;
-            int tileY = blockY + padding; 
-            size_t tileSize = (tileX)*(tileY)*sizeof(float);
+            bool SHARED = true;  
+            if(SHARED)
+            {
 
-            // for each tile only 4th the threads are allocated and then reused accordingly
-            int blockDimX = ceil((double)tileX/4), blockDimY = tileY;
+                // Size to be allocated for shared memory inside kernel
+                // This is the size of block along with padding so that convolution can be done 
+                // at the border points
+                int tileX = blockX + padding;
+                int tileY = blockY + padding; 
+                size_t tileSize = (tileX)*(tileY)*sizeof(float);
 
-            // the no. of thread blocks that have to be launched will be the no. of image rows and cols 
-            // divided by the no. of pixel we wish to keep in one block of image
-            int gridDimX = ceil((double)img.rows/blockX), gridDimY = ceil((double)img.cols/blockY);
+                // for each tile only 4th the threads are allocated and then reused accordingly
+                int blockDimX = ceil((double)tileX/4), blockDimY = tileY;
 
-            // Specifying execution configuration
-            dim3 X(gridDimX,gridDimY);
-            dim3 Y(blockDimX,blockDimY);
-            convolution<<<X, Y, tileSize>>>(d_B, paddedX, paddedY, blockX, blockY, d_outputBMag, d_outputBAng, img.rows, img.cols);
-            convolution<<<X, Y, tileSize>>>(d_G, paddedX, paddedY, blockX, blockY, d_outputGMag, d_outputGAng, img.rows, img.cols);
-            convolution<<<X, Y, tileSize>>>(d_R, paddedX, paddedY, blockX, blockY, d_outputRMag, d_outputRAng, img.rows, img.cols);
+                // the no. of thread blocks that have to be launched will be the no. of image rows and cols 
+                // divided by the no. of pixel we wish to keep in one block of image
+                int gridDimX = ceil((double)img.rows/blockX), gridDimY = ceil((double)img.cols/blockY);
+
+                // Specifying execution configuration
+                X.x = gridDimX, X.y = gridDimY;
+                Y.x = blockDimX, Y.y = blockDimY;
+                convolutionShared<<<X, Y, tileSize>>>(d_B, paddedX, paddedY, blockX, blockY, d_outputBMag, d_outputBAng, img.rows, img.cols);
+                convolutionShared<<<X, Y, tileSize>>>(d_G, paddedX, paddedY, blockX, blockY, d_outputGMag, d_outputGAng, img.rows, img.cols);
+                convolutionShared<<<X, Y, tileSize>>>(d_R, paddedX, paddedY, blockX, blockY, d_outputRMag, d_outputRAng, img.rows, img.cols);
            
+            }else
+            {
+                // number of threads launched in X and Y axis
+                Y.x = blockX, Y.y = blockY;
+
+                // number of blocks launched in X and Y axis
+                X.x = ceil(img.rows/blockX), X.y = ceil(img.cols/blockY);
+
+                convolutionGlobal<<<X, Y>>>(d_B, paddedX, paddedY, d_outputBMag, d_outputBAng);
+                convolutionGlobal<<<X, Y>>>(d_G, paddedX, paddedY, d_outputGMag, d_outputGAng);
+                convolutionGlobal<<<X, Y>>>(d_R, paddedX, paddedY, d_outputRMag, d_outputRAng);
+
+            }
 
             err = cudaGetLastError();
             if (err != cudaSuccess)
@@ -607,46 +714,36 @@ int main(void)
             //     cout<<"i: "<<i<<" featureVec:"<<featureVec[i]<<endl;
             // }
 
-            // int winsize = 3780, blockSizeX = 18, blockSizeY = 2;
-            // int numBlocksPerWindowX = 7, numBlocksPerWindowY = 15;
-            // int numBlocksX =1, numBlocksY = 1;
-            // float *h_weights = (float *)malloc(winsize*sizeof(float));
-            // float bias;
+            cudaMemcpy(input, featureVec, winsize*sizeof(float), cudaMemcpyHostToDevice);
 
-            // float *inputs=featureVec;
-            // int imsize = numBlocksX*numBlocksY*18*2;
-            // err = cudaMalloc((void **)&inputs,imsize*sizeof(float));
-            // // cudaMemcpy(inputs, final, imsize*sizeof(float), cudaMemcpyHostToDevice);
-
-            // float *d_weights=NULL;
-            // err = cudaMalloc((void **)&d_weights,(winsize*sizeof(float)));
-
-
-            // int opX = (numBlocksX - numBlocksPerWindowX) + 1;
-            // int opY = (numBlocksY - numBlocksPerWindowY) + 1;
-           
-            // float *h_svmScores = (float *)malloc(opX*opY*sizeof(float));
-
-            // float *d_svmScores = NULL;
-            // cudaMalloc((void **)&d_svmScores,(opX*opY*sizeof(float)));
-
-            // FILE *f = fopen("svmweights.txt","r");
-            // for(int i = 0; i < winsize; i++)
-            //     fscanf(f, "%f", h_weights+i);
-
-            // fscanf(f, "%f", &bias);
-
-            // cudaMemcpy(d_weights, h_weights, winsize*sizeof(float), cudaMemcpyHostToDevice);
-            
-            // dim3 grid1(opX,opY,1);
-            // dim3 block1(numBlocksPerWindowX*blockSizeX , 1 ,1);
-
-            // LinearSVMEvaluation<<<grid1, block1>>>(inputs, h_weights, bias,
+            // LinearSVMEvaluation<<<grid1, block1>>>(input, h_weights, bias,
             //   blockSizeX, blockSizeY, numBlocksPerWindowX, numBlocksPerWindowY, d_svmScores);
 
-            // cudaMemcpy(d_svmScores, h_svmScores, opX*opY*sizeof(float), cudaMemcpyDeviceToHost);
+            // cudaMemcpy(h_svmScores,d_svmScores,  opX*opY*sizeof(float), cudaMemcpyDeviceToHost);
+            // cout<<"Svm Score: "<<h_svmScores[0]<<endl;
 
-            // cout<<h_svmScores[0]<<endl;
+            dim3 grid1(1,1,1);
+            dim3 block1(numBlocksPerWindowX*blockSizeX , 1 ,1);
+            printf("%d\n", numBlocksPerWindowX*blockSizeX);
+
+            LinearSVMEvaluation<<<grid1, block1>>>(input, d_weights, bias, 0,
+                    blockSizeX, blockSizeY, numBlocksPerWindowX, numBlocksPerWindowY, d_svmScores);
+
+            err = cudaMemcpy(h_svmScores, d_svmScores, opX*opY*sizeof(float), cudaMemcpyDeviceToHost);
+            
+            if(err != cudaSuccess)
+                printf("error3\n");
+
+            printf("%f",h_svmScores[0]);
+            // depending on svm score we can classify this window as containing pedestrian or not
+            if( h_svmScores[0]>0 )
+            {
+                Mat imgClone = resizeImg.clone();
+                Rect r=Rect(col, row, windowsCols, windowsRows);
+                rectangle(imgClone,r,Scalar(255,0,0),1,8,0);
+                imshow("Pedestrian Detection", imgClone);
+                waitKey(0);
+            } 
 
 
             // Reset the device and exit
@@ -663,7 +760,7 @@ int main(void)
                 exit(EXIT_FAILURE);
             }
 
-            printf("Done\n");
+            // printf("Done\n");
         }   
 
     }

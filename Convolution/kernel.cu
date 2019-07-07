@@ -11,11 +11,57 @@
 // declaring constant memory for kernel
 __device__ __constant__ float d_filterKernel[FILTER_SIZE] = { -1, 0, 1};
 
+__global__ void convolutionGlobal( float *image, int height, int width,
+							 	   float *outputMag, float *outputAng	)
+{
+	/*
+		this blockOrigin(X,Y) are w.r.t to the padded image 
+		these are the coordinates where blocks (0,0) are placed in padded image
+	*/
+	
+	int blockOriginX = blockIdx.x * blockDim.x  + PADDING_SIZE;
+	int blockOriginY = blockIdx.y * blockDim.y  + PADDING_SIZE;
+	// printf("blockOriginX:%d blockOriginY:%d\n",blockOriginX,blockOriginY);
+	
+	/*
+		this tileOrigin(X,Y) are w.r.t to the padded image 
+		these are the coordinates where tiles (0,0) are placed in padded image	
+	*/	
 
-__global__ void convolution( float *image, int paddedX, int paddedY,
-							 int blockX, int blockY, 
-							 float *outputMag, float *outputAng,
-							  int imgRows, int imgCols)
+	int tileOriginX = blockOriginX - PADDING_SIZE;
+	int tileOriginY = blockOriginY - PADDING_SIZE;
+	// printf("tileOriginX:%d tileOriginY:%d\n",tileOriginX,tileOriginY);
+
+	int pixelX = blockOriginX + threadIdx.x;
+	int pixelY = blockOriginY + threadIdx.y;
+
+	if( (tileOriginX + threadIdx.x)< height - 2*PADDING_SIZE && tileOriginY + threadIdx.y < width - 2*PADDING_SIZE )
+	{	
+		double gX = 0, gY = 0, gMag = 0, gAng = 0;				
+		for (int k = -PADDING_SIZE; k <= PADDING_SIZE ; ++k)
+		{
+			// along x direction 
+			gX += d_filterKernel[k+PADDING_SIZE] * image[(pixelX + k)*width + (pixelY)];
+			gY += d_filterKernel[k+PADDING_SIZE] * image[(pixelX)*width + (pixelY+k)];
+
+		}
+		// this 90.1 is to make gAng + else it becomes -0.0000
+		gMag = sqrt(gX*gX + gY*gY);
+		
+		if( gX==0 )
+			gAng = 90;
+		else
+			gAng = atan(gY/gX)*180.0/PI + 90.1;
+
+		outputMag[(tileOriginX + threadIdx.x)*(width-2*PADDING_SIZE)+ tileOriginY + threadIdx.y] = gMag;
+		outputAng[(tileOriginX + threadIdx.x)*(width-2*PADDING_SIZE)+ tileOriginY + threadIdx.y] = gAng;	
+	}
+}
+
+__global__ void convolutionShared(float *image, int paddedX, int paddedY,
+   								  int blockX, int blockY, 
+   								  float *outputMag, float *outputAng,
+   								  int imgRows, int imgCols)
 {
 
 	/*
@@ -201,38 +247,70 @@ void l2norm(const int *input, float *output)
 	}
 }
 
-__global__ void LinearSVMEvaluation(float *inputs, float *weigths, float bias,
+// __global__ void LinearSVMEvaluation(float *inputs, float *weigths, float bias,
+//                                     int blockSizeX, int blockSizeY, int numBlocksPerWindowX,
+//                                     int numBlocksPerWindowY, float *svmScores
+//                                       )
+// {
+// 	// int numBlocksX = 1;
+
+// 	int col = threadIdx.x;
+// 	int totalCols = blockDim.x;
+// 	//int imWidth = blockSizeX * numBlocksX;
+// 	//int WinOff = blockIdx.x * blockSizeX + blockIdx.y * blockSizeY * blockSizeX;
+// 	__shared__ float sum[18*7];
+// 	int i;
+
+// 	//multiply features by their respective weights parallely.
+// 	for(i = 0; i < numBlocksPerWindowY * blockSizeY; i++){
+// 	sum[col] = inputs[i * totalCols + col] * weigths[i * totalCols + col];
+// 	__syncthreads();
+// 	}
+
+// 	//parallel reduction.
+// 	for(unsigned int s=blockDim.x/2;s>0;s>>=1){
+// 		if(col < s){
+// 			sum[col] += sum[col + s];
+// 		}
+// 		__syncthreads();
+// 	}
+
+// 	//subtract bias and store final score in global memory.
+// 	if(col==0){
+// 	sum[0] -= bias;
+// 	svmScores[0] = sum[0];
+// }
+
+// }
+
+__global__ void LinearSVMEvaluation(float *inputs, float *weigths, float bias, int loc,
                                     int blockSizeX, int blockSizeY, int numBlocksPerWindowX,
-                                    int numBlocksPerWindowY, float *svmScores
+                                    int numBlocksPerWindowY,
+                                    float *svmScores
                                       )
 {
-	int numBlocksX = 1;
+  int col = threadIdx.x;
+  int totalCols = blockDim.x;
 
-	int col = threadIdx.x;
-	int totalCols = blockDim.x;
-	int imWidth = blockSizeX * numBlocksX;
-	int WinOff = blockIdx.x * blockSizeX + blockIdx.y * blockSizeY * blockSizeX;
-	__shared__ float sum[18*7];
-	int i;
+  __shared__ float sum[4];
+  int i;
 
-	//multiply features by their respective weights parallely.
-	for(i = 0; i < numBlocksPerWindowY * blockSizeY; i++){
-	sum[col] = inputs[WinOff + i * imWidth + col] * weigths[i * totalCols + col];
-	__syncthreads();
-	}
+  for(i = 0; i < numBlocksPerWindowY * blockSizeY; i++){
+    sum[col] = inputs[i * totalCols + col] * weigths[i * totalCols + col];
+    __syncthreads();
+  }
 
-	//parallel reduction.
-	for(unsigned int s=blockDim.x/2;s>0;s>>=1){
+  for(unsigned int s=blockDim.x/2;s>0;s>>=1){
 		if(col < s){
 			sum[col] += sum[col + s];
 		}
 		__syncthreads();
 	}
 
-	//subtract bias and store final score in global memory.
-	if(col==0){
-	sum[0] -= bias;
-	svmScores[gridDim.x * blockIdx.y + blockIdx.x] = sum[0];
-}
+
+  if(col==0){
+    sum[0] += bias;
+    svmScores[loc] = sum[0];
+  }
 
 }
