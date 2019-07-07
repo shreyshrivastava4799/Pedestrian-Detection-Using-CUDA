@@ -247,70 +247,38 @@ void l2norm(const int *input, float *output)
 	}
 }
 
-// __global__ void LinearSVMEvaluation(float *inputs, float *weigths, float bias,
-//                                     int blockSizeX, int blockSizeY, int numBlocksPerWindowX,
-//                                     int numBlocksPerWindowY, float *svmScores
-//                                       )
-// {
-// 	// int numBlocksX = 1;
-
-// 	int col = threadIdx.x;
-// 	int totalCols = blockDim.x;
-// 	//int imWidth = blockSizeX * numBlocksX;
-// 	//int WinOff = blockIdx.x * blockSizeX + blockIdx.y * blockSizeY * blockSizeX;
-// 	__shared__ float sum[18*7];
-// 	int i;
-
-// 	//multiply features by their respective weights parallely.
-// 	for(i = 0; i < numBlocksPerWindowY * blockSizeY; i++){
-// 	sum[col] = inputs[i * totalCols + col] * weigths[i * totalCols + col];
-// 	__syncthreads();
-// 	}
-
-// 	//parallel reduction.
-// 	for(unsigned int s=blockDim.x/2;s>0;s>>=1){
-// 		if(col < s){
-// 			sum[col] += sum[col + s];
-// 		}
-// 		__syncthreads();
-// 	}
-
-// 	//subtract bias and store final score in global memory.
-// 	if(col==0){
-// 	sum[0] -= bias;
-// 	svmScores[0] = sum[0];
-// }
-
-// }
-
-__global__ void LinearSVMEvaluation(float *inputs, float *weigths, float bias, int loc,
+__global__ void LinearSVMEvaluation(float *inputs, float *weigths, float bias,
                                     int blockSizeX, int blockSizeY, int numBlocksPerWindowX,
-                                    int numBlocksPerWindowY,
-                                    float *svmScores
+                                    int numBlocksPerWindowY, float *svmScores
                                       )
 {
-  int col = threadIdx.x;
-  int totalCols = blockDim.x;
+	// int numBlocksX = 1;
 
-  __shared__ float sum[4];
-  int i;
+	int col = threadIdx.x;
+	int totalCols = blockDim.x;
+	//int imWidth = blockSizeX * numBlocksX;
+	//int WinOff = blockIdx.x * blockSizeX + blockIdx.y * blockSizeY * blockSizeX;
+	__shared__ float sum[18*7];
+	int i;
 
-  for(i = 0; i < numBlocksPerWindowY * blockSizeY; i++){
-    sum[col] = inputs[i * totalCols + col] * weigths[i * totalCols + col];
-    __syncthreads();
-  }
+	//multiply features by their respective weights parallely.
+	for(i = 0; i < numBlocksPerWindowY * blockSizeY; i++){
+	sum[col] = inputs[i * totalCols + col] * weigths[i * totalCols + col];
+	__syncthreads();
+	}
 
-  for(unsigned int s=blockDim.x/2;s>0;s>>=1){
+	//parallel reduction.
+	for(unsigned int s=blockDim.x/2;s>0;s>>=1){
 		if(col < s){
 			sum[col] += sum[col + s];
 		}
 		__syncthreads();
 	}
 
-
-  if(col==0){
-    sum[0] += bias;
-    svmScores[loc] = sum[0];
-  }
+	//subtract bias and store final score in global memory.
+	if(col==0){
+	sum[0] -= bias;
+	svmScores[0] = sum[0];
+}
 
 }

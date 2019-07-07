@@ -220,93 +220,42 @@ int main(void)
     ifstream inFile("imageName.txt");
     ofstream outFile("outfileNeg.txt");
 
-    int winsize = 3780, blockSizeX = 18, blockSizeY = 2;
+    int winsize = 3780;
+    int blockSizeX = 18, blockSizeY = 2;
     int numBlocksPerWindowX = 7, numBlocksPerWindowY = 15;
 
-    float *h_weights = (float *)malloc(winsize*sizeof(float));
     float bias;
+    
 
-    float *input= NULL;
+    float *input;
     err = cudaMalloc((void **)&input,winsize*sizeof(float));
-    // cudaMemcpy(input, final, winsize*sizeof(float), cudaMemcpyHostToDevice);
-    if (err != cudaSuccess)
-    {
-        fprintf(stderr, "Failed to allocate device memory for magnitude (error code %s)!\n", cudaGetErrorString(err));
-        exit(EXIT_FAILURE);
-    }
+    
+    float *h_weights = (float *)malloc(winsize*sizeof(float));
 
     float *d_weights=NULL;
-    cudaMalloc((void **)&d_weights,(winsize*sizeof(float)));
-    //printf("%d",err);
+    err = cudaMalloc((void **)&d_weights,(winsize*sizeof(float)));
 
-    //int opX = (numBlocksX - numBlocksPerWindowX) + 1;
-    //int opY = (numBlocksY - numBlocksPerWindowY) + 1;
-    int opX = 1, opY = 1;
+
+    int opX = 1;
+    int opY = 1;
+    cout<<"opX: "<<opX<<" opY: "<<opY<<endl;
+   
     float *h_svmScores = (float *)malloc(opX*opY*sizeof(float));
 
     float *d_svmScores = NULL;
     cudaMalloc((void **)&d_svmScores,(opX*opY*sizeof(float)));
 
-
     FILE *f = fopen("svmweights.txt","r");
-    for(int i = 0; i < winsize; i++){
-      fscanf(f, "%f", h_weights+i);
-      //printf("%f\t", final[i]);
-    }
+    for(int i = 0; i < winsize; i++)
+        fscanf(f, "%f", h_weights+i);
 
     fscanf(f, "%f", &bias);
     fclose(f);
-    //printf("%f\n", bias);
 
-    err = cudaMemcpy(d_weights, h_weights, winsize*sizeof(float), cudaMemcpyHostToDevice);
-    if(err != cudaSuccess)
-    printf("error2\n");
-
-    // int winsize = 3780;
-    // int blockSizeX = 18, blockSizeY = 2;
-    // int numBlocksPerWindowX = 7, numBlocksPerWindowY = 15;
-
-    // float bias;
+    cudaMemcpy(d_weights, h_weights, winsize*sizeof(float), cudaMemcpyHostToDevice);
     
-
-    // float *input;
-    // err = cudaMalloc((void **)&input,winsize*sizeof(float));
-    // if (err != cudaSuccess)
-    // {
-    //     fprintf(stderr, "Failed to allocate device memory for svm input (error code %s)!\n", cudaGetErrorString(err));
-    //     exit(EXIT_FAILURE);
-    // }
-    
-    // float *h_weights = (float *)malloc(winsize*sizeof(float));
-
-    // float *d_weights=NULL;
-    // err = cudaMalloc((void **)&d_weights,(winsize*sizeof(float)));
-    // if (err != cudaSuccess)
-    // {
-    //     fprintf(stderr, "Failed to allocate device memory for svm weights (error code %s)!\n", cudaGetErrorString(err));
-    //     exit(EXIT_FAILURE);
-    // }
-
-    // int opX = 1;
-    // int opY = 1;
-    // cout<<"opX: "<<opX<<" opY: "<<opY<<endl;
-   
-    // float *h_svmScores = (float *)malloc(opX*opY*sizeof(float));
-
-    // float *d_svmScores = NULL;
-    // cudaMalloc((void **)&d_svmScores,(opX*opY*sizeof(float)));
-
-    // FILE *f = fopen("svmweights.txt","r");
-    // for(int i = 0; i < winsize; i++)
-    //     fscanf(f, "%f", h_weights+i);
-
-    // fscanf(f, "%f", &bias);
-    // fclose(f);
-
-    // cudaMemcpy(d_weights, h_weights, winsize*sizeof(float), cudaMemcpyHostToDevice);
-    
-    // dim3 grid1(opX,opY,1);
-    // dim3 block1(numBlocksPerWindowX*blockSizeX , 1 ,1);
+    dim3 grid1(opX,opY,1);
+    dim3 block1(numBlocksPerWindowX*blockSizeX , 1 ,1);
 
 
     string line;
@@ -358,6 +307,7 @@ int main(void)
         for (int col = 0; col < resizeImg.cols - windowsCols; col += StepSlide)
         {
            
+
             Mat img(windowsRows, windowsCols, CV_8UC3, Scalar(0,0,0));        
             for (int k = 0; k < windowsRows; ++k)
             {
@@ -708,7 +658,7 @@ int main(void)
             }
             else cout << "Unable to open file";
 
-            // // Verification of feature vector:
+            // Verification of feature vector:
             // for (int i = 0; i < numElementsOut; ++i)
             // {
             //     cout<<"i: "<<i<<" featureVec:"<<featureVec[i]<<endl;
@@ -716,25 +666,12 @@ int main(void)
 
             cudaMemcpy(input, featureVec, winsize*sizeof(float), cudaMemcpyHostToDevice);
 
-            // LinearSVMEvaluation<<<grid1, block1>>>(input, h_weights, bias,
-            //   blockSizeX, blockSizeY, numBlocksPerWindowX, numBlocksPerWindowY, d_svmScores);
+            LinearSVMEvaluation<<<grid1, block1>>>(input, h_weights, bias,
+              blockSizeX, blockSizeY, numBlocksPerWindowX, numBlocksPerWindowY, d_svmScores);
 
-            // cudaMemcpy(h_svmScores,d_svmScores,  opX*opY*sizeof(float), cudaMemcpyDeviceToHost);
-            // cout<<"Svm Score: "<<h_svmScores[0]<<endl;
+            cudaMemcpy(d_svmScores, h_svmScores, opX*opY*sizeof(float), cudaMemcpyDeviceToHost);
+            cout<<"Svm Score: "<<h_svmScores[0]<<endl;
 
-            dim3 grid1(1,1,1);
-            dim3 block1(numBlocksPerWindowX*blockSizeX , 1 ,1);
-            printf("%d\n", numBlocksPerWindowX*blockSizeX);
-
-            LinearSVMEvaluation<<<grid1, block1>>>(input, d_weights, bias, 0,
-                    blockSizeX, blockSizeY, numBlocksPerWindowX, numBlocksPerWindowY, d_svmScores);
-
-            err = cudaMemcpy(h_svmScores, d_svmScores, opX*opY*sizeof(float), cudaMemcpyDeviceToHost);
-            
-            if(err != cudaSuccess)
-                printf("error3\n");
-
-            printf("%f",h_svmScores[0]);
             // depending on svm score we can classify this window as containing pedestrian or not
             if( h_svmScores[0]>0 )
             {
